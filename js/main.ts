@@ -1,5 +1,17 @@
 var xml2json:(input:any) => any;
 
+interface Category {
+  id:number;
+  slug:string;
+  displayName:string;
+}
+
+interface Tag {
+  id:number;
+  slug:string;
+  displayName:string;
+}
+
 interface Post {
   id:number;
   postTime:number;
@@ -14,7 +26,17 @@ interface Post {
 const WORDPRESS_PATHS = {
   blogTitle: '/rss/channel/title',
   blogUrl: '/rss/channel/link',
-  posts: '/rss/channel/item'
+  posts: '/rss/channel/item',
+  categories: '/rss/channel/wp:category',
+  tags: '/rss/channel/wp:tag'
+}
+
+const WORDPRESS_NAMESPACES = {
+	excerpt: "http://wordpress.org/export/1.2/excerpt/",
+	content: "http://purl.org/rss/1.0/modules/content/",
+	wfw: "http://wellformedweb.org/CommentAPI/",
+	dc: "http://purl.org/dc/elements/1.1/",
+	wp: "http://wordpress.org/export/1.2/"  
 }
 
 class WordPressImport {
@@ -52,16 +74,58 @@ class WordPressImport {
     return posts;
   }
 
+  public get categories():Array<Category> {
+    return this._categoriesTags("category");
+  }
+
+  public get tags():Array<Category> {
+    return this._categoriesTags("tag");
+  }
+
+  private _categoriesTags(type:string):Array<Category|Tag> {
+    switch(type) {
+      case "category":
+        var items:Array<Tag> = [];
+        var path = WORDPRESS_PATHS.categories;
+        var slug = "category_nicename";
+        var name = "cat_name";
+        break;
+      case "tag":
+        var items:Array<Category> = [];
+        var path = WORDPRESS_PATHS.tags;
+        var slug = "tag_slug";
+        var name = "tag_name";
+        break;        
+    }
+    var results = this._doc.evaluate (path, this._doc, this._resolver, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
+    var item = results.iterateNext();
+    while(item) {
+      items.push({
+        id: Number(item["getElementsByTagName"]("term_id")[0].innerHTML),
+        slug: item["getElementsByTagName"](slug)[0].innerHTML,
+        displayName: item["getElementsByTagName"](name)[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, "")
+      });
+      item = results.iterateNext();
+    }
+    return items;
+  }
+
   public toJSON() {
     return {
       blogTitle: this.blogTitle,
       blogUrl: this.blogUrl,
-      posts: this.posts
+      posts: this.posts,
+      categories: this.categories,
+      tags: this.tags
     }
   }
 
   public get toString() {
     return JSON.stringify(this.toJSON(), null, 2);
+  }
+
+  private _resolver(ns:string) {
+    return WORDPRESS_NAMESPACES[ns];
   }
 }
 
