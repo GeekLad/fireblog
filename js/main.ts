@@ -27,34 +27,33 @@ interface Tag {
   displayName:string;
 }
 
-interface Attachment {
-  id:number;
-  parent:number;
-  url:string;
-}
-
 interface Post {
   id:number;
   parent?:number;
   postTime:number;
   originalUrl:string;
   path:string;
-  type:string;
   status:string;
   title:string;
   content:string;
 }
 
-interface Page {
+interface Page extends Post { }
+
+interface Attachment {
   id:number;
-  parent?:number;
-  postTime:number;
-  originalUrl:string;
+  parent:number;
+  url:string;
   path:string;
+}
+
+interface Path {
   type:string;
-  status:string;
-  title:string;
-  content:string;
+  item:Post|Page|Attachment;
+}
+
+interface PathCollection {
+  [path:string]:Path;
 }
 
 interface Author {
@@ -66,86 +65,116 @@ interface Author {
 
 class WordPressImport {
   private _doc:XMLDocument;
+  private _title:string;
+  private _url:string;
+  private _authors:Array<Author> = [];
+  private _categories:Array<Category> = [];
+  private _tags:Array<Category> = [];
+  private _paths:PathCollection = {};
+  private _posts:Array<Post> = [];
+  private _pages:Array<Page> = [];
+  private _attachments:Array<Attachment> = [];
 
   constructor(xmlString:string) {
     this._doc = (new DOMParser()).parseFromString(xmlString, "application/xml");
+    this._title = this._doc.evaluate (WORDPRESS_PATHS.blogTitle, this._doc, null, XPathResult.STRING_TYPE, null).stringValue;
+    this._url = this._doc.evaluate (WORDPRESS_PATHS.blogUrl, this._doc, null, XPathResult.STRING_TYPE, null).stringValue;
+    this._getAuthors();
+    this._getCategoriesTags("category");
+    this._getCategoriesTags("tag");
+    this._getPosts();
   }
 
   public get blogTitle():string {
-    return this._doc.evaluate (WORDPRESS_PATHS.blogTitle, this._doc, null, XPathResult.STRING_TYPE, null).stringValue;
+    return this._title;
   }
 
   public get blogUrl():string {
-    return this._doc.evaluate (WORDPRESS_PATHS.blogUrl, this._doc, null, XPathResult.STRING_TYPE, null).stringValue;
+    return this._url;
+  }
+
+  public get authors():Array<Author> {
+    return this._authors;
   }
 
   public get posts():Array<Post> {
-    return this._getPosts("post") as Array<Post>;
+    return this._posts;
   }
 
   public get pages():Array<Page> {
-    return this._getPosts("page") as Array<Page>;
+    return this._pages;
   }
 
   public get attachments():Array<Attachment> {
-    return this._getPosts("attachment") as Array<Attachment>;
+    return this._attachments;
   }
 
-  private _getPosts(type:string):Array<Post|Page|Attachment> {
+  public get categories():Array<Category> {
+    return this._categories;
+  }
+
+  public get tags():Array<Category> {
+    return this._tags;
+  }
+
+  public get paths():PathCollection {
+    return this._paths;
+  }
+
+  private _getPosts() {
     var posts:Array<Post|Page|Attachment> = [];
     var item:Post|Page|Attachment;
     var results = this._doc.evaluate (WORDPRESS_PATHS.posts, this._doc, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
     var post = results.iterateNext();
     while(post) {
       var post_type = post["getElementsByTagName"]("post_type")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, "");
-      if(post_type == type) {
-        switch(type) {
-          case "attachment":
-            item = {
-              id: Number(post["getElementsByTagName"]("post_id")[0].innerHTML),
-              parent: Number(post["getElementsByTagName"]("post_parent")[0].innerHTML),
-              url: post["getElementsByTagName"]("attachment_url")[0].innerHTML
-            } as Attachment;
-            break;
+      switch(post_type) {
+        case "attachment":
+          item = {
+            id: Number(post["getElementsByTagName"]("post_id")[0].innerHTML),
+            parent: Number(post["getElementsByTagName"]("post_parent")[0].innerHTML),
+            url: post["getElementsByTagName"]("attachment_url")[0].innerHTML,
+            path: post["getElementsByTagName"]("attachment_url")[0].innerHTML.replace(this.blogUrl, ""),
+          } as Attachment;
+          this._attachments.push(item);
+          break;
 
-          case "post":
-            item = {
-              id: Number(post["getElementsByTagName"]("post_id")[0].innerHTML),
-              postTime: (new Date(post["getElementsByTagName"]("post_date")[0].innerHTML)).getTime(),
-              originalUrl: post["getElementsByTagName"]("link")[0].innerHTML,
-              path: post["getElementsByTagName"]("link")[0].innerHTML.replace(this.blogUrl, ""),
-              type: type,
-              status: post["getElementsByTagName"]("status")[0].innerHTML,
-              title: post["getElementsByTagName"]("title")[0].innerHTML,
-              content: post["getElementsByTagName"]("encoded")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
-            } as Post;
-            var parent = Number(post["getElementsByTagName"]("post_parent")[0].innerHTML);
-            if(parent != 0) item.parent = parent;
-            break;
+        case "post":
+          item = {
+            id: Number(post["getElementsByTagName"]("post_id")[0].innerHTML),
+            postTime: (new Date(post["getElementsByTagName"]("post_date")[0].innerHTML)).getTime(),
+            originalUrl: post["getElementsByTagName"]("link")[0].innerHTML,
+            path: post["getElementsByTagName"]("link")[0].innerHTML.replace(this.blogUrl, ""),
+            status: post["getElementsByTagName"]("status")[0].innerHTML,
+            title: post["getElementsByTagName"]("title")[0].innerHTML,
+            content: post["getElementsByTagName"]("encoded")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
+          } as Post;
+          var parent = Number(post["getElementsByTagName"]("post_parent")[0].innerHTML);
+          if(parent != 0) item.parent = parent;
+          this._posts.push(item);
+          break;
 
-          case "page":
-            item = {
-              id: Number(post["getElementsByTagName"]("post_id")[0].innerHTML),
-              postTime: (new Date(post["getElementsByTagName"]("post_date")[0].innerHTML)).getTime(),
-              originalUrl: post["getElementsByTagName"]("link")[0].innerHTML,
-              path: post["getElementsByTagName"]("link")[0].innerHTML.replace(this.blogUrl, ""),
-              type: type,
-              status: post["getElementsByTagName"]("status")[0].innerHTML,
-              title: post["getElementsByTagName"]("title")[0].innerHTML,
-              content: post["getElementsByTagName"]("encoded")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
-            } as Post;
-            var parent = Number(post["getElementsByTagName"]("post_parent")[0].innerHTML);
-            if(parent != 0) item.parent = parent;
-            break;
-        }
-        posts.push(item);
+        case "page":
+          item = {
+            id: Number(post["getElementsByTagName"]("post_id")[0].innerHTML),
+            postTime: (new Date(post["getElementsByTagName"]("post_date")[0].innerHTML)).getTime(),
+            originalUrl: post["getElementsByTagName"]("link")[0].innerHTML,
+            path: post["getElementsByTagName"]("link")[0].innerHTML.replace(this.blogUrl, ""),
+            status: post["getElementsByTagName"]("status")[0].innerHTML,
+            title: post["getElementsByTagName"]("title")[0].innerHTML,
+            content: post["getElementsByTagName"]("encoded")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
+          } as Post;
+          var parent = Number(post["getElementsByTagName"]("post_parent")[0].innerHTML);
+          if(parent != 0) item.parent = parent;
+          this._pages.push(item);
+          break;
       }
+      this._addPathItem(item);
       post = results.iterateNext();
     }
-    return posts;
   }
 
-  public get authors():Array<Author> {
+  private _getAuthors() {
     var authors:Array<Author> = [];
     var results = this._doc.evaluate(WORDPRESS_PATHS.authors, this._doc, this._resolver, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
     var author = results.iterateNext();
@@ -156,21 +185,12 @@ class WordPressImport {
         userName: author["getElementsByTagName"]("author_login")[0].innerHTML,
         displayName: author["getElementsByTagName"]("author_display_name")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
       };
-      authors.push(newAuthor);
+      this._authors.push(newAuthor);
       author = results.iterateNext();
     }
-    return authors;
   }
 
-  public get categories():Array<Category> {
-    return this._categoriesTags("category");
-  }
-
-  public get tags():Array<Category> {
-    return this._categoriesTags("tag");
-  }
-
-  private _categoriesTags(type:string):Array<Category|Tag> {
+  private _getCategoriesTags(type:string) {
     switch(type) {
       case "category":
         var items:Array<Tag> = [];
@@ -198,7 +218,26 @@ class WordPressImport {
       items.push(newItem);
       item = results.iterateNext();
     }
-    return items;
+    switch(type) {
+      case "category":
+        this._categories = items;
+        break;
+      case "tag":
+        this._tags = items;
+        break;
+    }
+  }
+
+  private _addPathItem(item:Post|Page|Attachment) {
+    if(!this._paths[item.path]) this._paths[item.path] = {
+      type:item.constructor.name,
+      item:item
+    };
+  }
+
+  private _getPathItem(path:string):Path {
+    if(this._paths[path]) return this._paths[path];
+    return null;
   }
 
   public toJSON() {
@@ -211,6 +250,7 @@ class WordPressImport {
       posts: this.posts,
       pages: this.pages,
       attachments: this.attachments,
+      paths: this.paths,
     }
   }
 
@@ -240,6 +280,9 @@ class StaticApp {
     $("#import_result").html(`
       Title: ${StaticApp._import.blogTitle}<br>
       URL: ${StaticApp._import.blogUrl}<br>
+      # Authors: ${StaticApp._import.authors.length}<br>
+      # Categories: ${StaticApp._import.categories.length}<br>
+      # Tags: ${StaticApp._import.tags.length}<br>
       # Attachments: ${StaticApp._import.attachments.length}<br>
       # Posts: ${StaticApp._import.posts.length}<br>
       # Pages: ${StaticApp._import.pages.length}<br>
