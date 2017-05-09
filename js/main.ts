@@ -51,6 +51,18 @@ class WordPressImport {
     }
     return posts;
   }
+
+  public toJSON() {
+    return {
+      blogTitle: this.blogTitle,
+      blogUrl: this.blogUrl,
+      posts: this.posts
+    }
+  }
+
+  public get toString() {
+    return JSON.stringify(this.toJSON(), null, 2);
+  }
 }
 
 class StaticApp {
