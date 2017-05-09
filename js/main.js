@@ -1,10 +1,10 @@
 var WORDPRESS_PATHS = {
-    blogTitle: '/rss/channel/title',
-    blogUrl: '/rss/channel/link',
-    posts: '/rss/channel/item',
-    categories: '/rss/channel/wp:category',
-    tags: '/rss/channel/wp:tag',
-    authors: '/rss/channel/wp:author'
+    blogTitle: "/rss/channel/title",
+    blogUrl: "/rss/channel/link",
+    posts: "/rss/channel/item",
+    categories: "/rss/channel/wp:category",
+    tags: "/rss/channel/wp:tag",
+    authors: "/rss/channel/wp:author"
 };
 var WORDPRESS_NAMESPACES = {
     excerpt: "http://wordpress.org/export/1.2/excerpt/",
@@ -33,55 +33,78 @@ var WordPressImport = (function () {
     });
     Object.defineProperty(WordPressImport.prototype, "posts", {
         get: function () {
-            var posts = [];
-            var results = this._doc.evaluate(WORDPRESS_PATHS.posts, this._doc, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
-            var post = results.iterateNext();
-            while (post) {
-                var type = post["getElementsByTagName"]("post_type")[0].innerHTML;
-                if (type != "attachment") {
-                    var newPost = {
-                        id: Number(post["getElementsByTagName"]("post_id")[0].innerHTML),
-                        postTime: (new Date(post["getElementsByTagName"]("post_date")[0].innerHTML)).getTime(),
-                        originalUrl: post["getElementsByTagName"]("link")[0].innerHTML,
-                        path: post["getElementsByTagName"]("link")[0].innerHTML.replace(this.blogUrl, ""),
-                        type: post["getElementsByTagName"]("post_type")[0].innerHTML,
-                        status: post["getElementsByTagName"]("status")[0].innerHTML,
-                        title: post["getElementsByTagName"]("title")[0].innerHTML,
-                        content: post["getElementsByTagName"]("encoded")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
-                    };
-                    var parent = Number(post["getElementsByTagName"]("post_parent")[0].innerHTML);
-                    if (parent != 0)
-                        newPost.parent = parent;
-                    posts.push(newPost);
-                }
-                post = results.iterateNext();
-            }
-            return posts;
+            return this._getPosts("post");
+        },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(WordPressImport.prototype, "pages", {
+        get: function () {
+            return this._getPosts("page");
         },
         enumerable: true,
         configurable: true
     });
     Object.defineProperty(WordPressImport.prototype, "attachments", {
         get: function () {
-            var attachments = [];
-            var results = this._doc.evaluate(WORDPRESS_PATHS.posts, this._doc, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
-            var attachment = results.iterateNext();
-            while (attachment) {
-                if (attachment["getElementsByTagName"]("post_type")[0].innerHTML == "attachment") {
-                    var newAttachment = {
-                        id: Number(attachment["getElementsByTagName"]("post_id")[0].innerHTML),
-                        parent: Number(attachment["getElementsByTagName"]("post_parent")[0].innerHTML),
-                        url: attachment["getElementsByTagName"]("attachment_url")[0].innerHTML
-                    };
-                    attachments.push(newAttachment);
-                }
-                attachment = results.iterateNext();
-            }
-            return attachments;
+            return this._getPosts("attachment");
         },
         enumerable: true,
         configurable: true
     });
+    WordPressImport.prototype._getPosts = function (type) {
+        var posts = [];
+        var item;
+        var results = this._doc.evaluate(WORDPRESS_PATHS.posts, this._doc, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
+        var post = results.iterateNext();
+        while (post) {
+            var post_type = post["getElementsByTagName"]("post_type")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, "");
+            if (post_type == type) {
+                switch (type) {
+                    case "attachment":
+                        item = {
+                            id: Number(post["getElementsByTagName"]("post_id")[0].innerHTML),
+                            parent: Number(post["getElementsByTagName"]("post_parent")[0].innerHTML),
+                            url: post["getElementsByTagName"]("attachment_url")[0].innerHTML
+                        };
+                        break;
+                    case "post":
+                        item = {
+                            id: Number(post["getElementsByTagName"]("post_id")[0].innerHTML),
+                            postTime: (new Date(post["getElementsByTagName"]("post_date")[0].innerHTML)).getTime(),
+                            originalUrl: post["getElementsByTagName"]("link")[0].innerHTML,
+                            path: post["getElementsByTagName"]("link")[0].innerHTML.replace(this.blogUrl, ""),
+                            type: type,
+                            status: post["getElementsByTagName"]("status")[0].innerHTML,
+                            title: post["getElementsByTagName"]("title")[0].innerHTML,
+                            content: post["getElementsByTagName"]("encoded")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
+                        };
+                        var parent = Number(post["getElementsByTagName"]("post_parent")[0].innerHTML);
+                        if (parent != 0)
+                            item.parent = parent;
+                        break;
+                    case "page":
+                        item = {
+                            id: Number(post["getElementsByTagName"]("post_id")[0].innerHTML),
+                            postTime: (new Date(post["getElementsByTagName"]("post_date")[0].innerHTML)).getTime(),
+                            originalUrl: post["getElementsByTagName"]("link")[0].innerHTML,
+                            path: post["getElementsByTagName"]("link")[0].innerHTML.replace(this.blogUrl, ""),
+                            type: type,
+                            status: post["getElementsByTagName"]("status")[0].innerHTML,
+                            title: post["getElementsByTagName"]("title")[0].innerHTML,
+                            content: post["getElementsByTagName"]("encoded")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
+                        };
+                        var parent = Number(post["getElementsByTagName"]("post_parent")[0].innerHTML);
+                        if (parent != 0)
+                            item.parent = parent;
+                        break;
+                }
+                posts.push(item);
+            }
+            post = results.iterateNext();
+        }
+        return posts;
+    };
     Object.defineProperty(WordPressImport.prototype, "authors", {
         get: function () {
             var authors = [];
@@ -154,7 +177,8 @@ var WordPressImport = (function () {
             categories: this.categories,
             tags: this.tags,
             posts: this.posts,
-            attachments: this.attachments
+            pages: this.pages,
+            attachments: this.attachments,
         };
     };
     Object.defineProperty(WordPressImport.prototype, "toString", {
@@ -180,11 +204,7 @@ var StaticApp = (function () {
     };
     StaticApp._readFile = function () {
         StaticApp._import = new WordPressImport(StaticApp._reader.result);
-        // var str = xml2json(doc);
-        // var data = JSON.parse(str.replace(/^{\sundefined/, "{"));
-        document.write('<pre>DONE\n');
-        //        document.write(data);
-        document.write('</pre>');
+        $("#import_result").html("\n      Title: " + StaticApp._import.blogTitle + "<br>\n      URL: " + StaticApp._import.blogUrl + "<br>\n      # Attachments: " + StaticApp._import.attachments.length + "<br>\n      # Posts: " + StaticApp._import.posts.length + "<br>\n      # Pages: " + StaticApp._import.pages.length + "<br>\n    ");
     };
     return StaticApp;
 }());
