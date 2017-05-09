@@ -27,9 +27,15 @@ interface Tag {
   displayName:string;
 }
 
-interface Post {
+interface Attachment {
   id:number;
   parent:number;
+  url:string;
+}
+
+interface Post {
+  id:number;
+  parent?:number;
   postTime:number;
   originalUrl:string;
   path:string;
@@ -66,33 +72,58 @@ class WordPressImport {
     var results = this._doc.evaluate (WORDPRESS_PATHS.posts, this._doc, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
     var post = results.iterateNext();
     while(post) {
-      posts.push({
-        id: Number(post["getElementsByTagName"]("post_id")[0].innerHTML),
-        parent: Number(post["getElementsByTagName"]("post_parent")[0].innerHTML),
-        postTime: (new Date(post["getElementsByTagName"]("post_date")[0].innerHTML)).getTime(),
-        originalUrl: post["getElementsByTagName"]("link")[0].innerHTML,
-        path: post["getElementsByTagName"]("link")[0].innerHTML.replace(this.blogUrl, ""),
-        type: post["getElementsByTagName"]("post_type")[0].innerHTML,
-        status: post["getElementsByTagName"]("status")[0].innerHTML,
-        title: post["getElementsByTagName"]("title")[0].innerHTML,
-        content: post["getElementsByTagName"]("encoded")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
-      });
+      var type = post["getElementsByTagName"]("post_type")[0].innerHTML;
+      if(type != "attachment") {
+        var newPost:Post = {
+          id: Number(post["getElementsByTagName"]("post_id")[0].innerHTML),
+          postTime: (new Date(post["getElementsByTagName"]("post_date")[0].innerHTML)).getTime(),
+          originalUrl: post["getElementsByTagName"]("link")[0].innerHTML,
+          path: post["getElementsByTagName"]("link")[0].innerHTML.replace(this.blogUrl, ""),
+          type: post["getElementsByTagName"]("post_type")[0].innerHTML,
+          status: post["getElementsByTagName"]("status")[0].innerHTML,
+          title: post["getElementsByTagName"]("title")[0].innerHTML,
+          content: post["getElementsByTagName"]("encoded")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
+        };
+        var parent = Number(post["getElementsByTagName"]("post_parent")[0].innerHTML);
+        if(parent != 0) newPost.parent = parent;
+        posts.push(newPost);
+      }
       post = results.iterateNext();
     }
     return posts;
   }
+
+  public get attachments():Array<Attachment> {
+    var attachments:Array<Attachment> = [];
+    var results = this._doc.evaluate (WORDPRESS_PATHS.posts, this._doc, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
+    var attachment = results.iterateNext();
+    while(attachment) {
+      if(attachment["getElementsByTagName"]("post_type")[0].innerHTML == "attachment") {
+        var newAttachment:Attachment = {
+          id: Number(attachment["getElementsByTagName"]("post_id")[0].innerHTML),
+          parent: Number(attachment["getElementsByTagName"]("post_parent")[0].innerHTML),
+          url: attachment["getElementsByTagName"]("attachment_url")[0].innerHTML
+        };
+        attachments.push(newAttachment);
+      }
+      attachment = results.iterateNext();
+    }
+    return attachments;
+  }
+
 
   public get authors():Array<Author> {
     var authors:Array<Author> = [];
     var results = this._doc.evaluate(WORDPRESS_PATHS.authors, this._doc, this._resolver, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
     var author = results.iterateNext();
     while(author) {
-      authors.push({
+      var newAuthor:Author = {
         id: Number(author["getElementsByTagName"]("author_id")[0].innerHTML),
         email: author["getElementsByTagName"]("author_email")[0].innerHTML,
         userName: author["getElementsByTagName"]("author_login")[0].innerHTML,
         displayName: author["getElementsByTagName"]("author_display_name")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
-      });
+      };
+      authors.push(newAuthor);
       author = results.iterateNext();
     }
     return authors;
@@ -110,12 +141,14 @@ class WordPressImport {
     switch(type) {
       case "category":
         var items:Array<Tag> = [];
+        var newItem:Tag;
         var path = WORDPRESS_PATHS.categories;
         var slug = "category_nicename";
         var name = "cat_name";
         break;
       case "tag":
         var items:Array<Category> = [];
+        var newItem:Category;
         var path = WORDPRESS_PATHS.tags;
         var slug = "tag_slug";
         var name = "tag_name";
@@ -124,11 +157,12 @@ class WordPressImport {
     var results = this._doc.evaluate(path, this._doc, this._resolver, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
     var item = results.iterateNext();
     while(item) {
-      items.push({
+      newItem = {
         id: Number(item["getElementsByTagName"]("term_id")[0].innerHTML),
         slug: item["getElementsByTagName"](slug)[0].innerHTML,
         displayName: item["getElementsByTagName"](name)[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
-      });
+      };
+      items.push(newItem);
       item = results.iterateNext();
     }
     return items;
@@ -142,6 +176,7 @@ class WordPressImport {
       categories: this.categories,
       tags: this.tags,
       posts: this.posts,
+      attachments: this.attachments
     }
   }
 
