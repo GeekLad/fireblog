@@ -1,10 +1,10 @@
-var xml2json;
 var WORDPRESS_PATHS = {
     blogTitle: '/rss/channel/title',
     blogUrl: '/rss/channel/link',
     posts: '/rss/channel/item',
     categories: '/rss/channel/wp:category',
-    tags: '/rss/channel/wp:tag'
+    tags: '/rss/channel/wp:tag',
+    authors: '/rss/channel/wp:author'
 };
 var WORDPRESS_NAMESPACES = {
     excerpt: "http://wordpress.org/export/1.2/excerpt/",
@@ -39,17 +39,37 @@ var WordPressImport = (function () {
             while (post) {
                 posts.push({
                     id: Number(post["getElementsByTagName"]("post_id")[0].innerHTML),
+                    parent: Number(post["getElementsByTagName"]("post_parent")[0].innerHTML),
                     postTime: (new Date(post["getElementsByTagName"]("post_date")[0].innerHTML)).getTime(),
-                    type: post["getElementsByTagName"]("post_type")[0].innerHTML,
                     originalUrl: post["getElementsByTagName"]("link")[0].innerHTML,
                     path: post["getElementsByTagName"]("link")[0].innerHTML.replace(this.blogUrl, ""),
+                    type: post["getElementsByTagName"]("post_type")[0].innerHTML,
+                    status: post["getElementsByTagName"]("status")[0].innerHTML,
                     title: post["getElementsByTagName"]("title")[0].innerHTML,
                     content: post["getElementsByTagName"]("encoded")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
-                    excerpt: post["getElementsByTagName"]("encoded")[1].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, "")
                 });
                 post = results.iterateNext();
             }
             return posts;
+        },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(WordPressImport.prototype, "authors", {
+        get: function () {
+            var authors = [];
+            var results = this._doc.evaluate(WORDPRESS_PATHS.authors, this._doc, this._resolver, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
+            var author = results.iterateNext();
+            while (author) {
+                authors.push({
+                    id: Number(author["getElementsByTagName"]("author_id")[0].innerHTML),
+                    email: author["getElementsByTagName"]("author_email")[0].innerHTML,
+                    userName: author["getElementsByTagName"]("author_login")[0].innerHTML,
+                    displayName: author["getElementsByTagName"]("author_display_name")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
+                });
+                author = results.iterateNext();
+            }
+            return authors;
         },
         enumerable: true,
         configurable: true
@@ -89,7 +109,7 @@ var WordPressImport = (function () {
             items.push({
                 id: Number(item["getElementsByTagName"]("term_id")[0].innerHTML),
                 slug: item["getElementsByTagName"](slug)[0].innerHTML,
-                displayName: item["getElementsByTagName"](name)[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, "")
+                displayName: item["getElementsByTagName"](name)[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
             });
             item = results.iterateNext();
         }
@@ -99,9 +119,10 @@ var WordPressImport = (function () {
         return {
             blogTitle: this.blogTitle,
             blogUrl: this.blogUrl,
-            posts: this.posts,
+            authors: this.authors,
             categories: this.categories,
-            tags: this.tags
+            tags: this.tags,
+            posts: this.posts,
         };
     };
     Object.defineProperty(WordPressImport.prototype, "toString", {
