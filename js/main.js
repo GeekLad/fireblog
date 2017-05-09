@@ -45,6 +45,20 @@ var WordPressImport = (function () {
         enumerable: true,
         configurable: true
     });
+    WordPressImport.prototype.toJSON = function () {
+        return {
+            blogTitle: this.blogTitle,
+            blogUrl: this.blogUrl,
+            posts: this.posts
+        };
+    };
+    Object.defineProperty(WordPressImport.prototype, "toString", {
+        get: function () {
+            return JSON.stringify(this.toJSON(), null, 2);
+        },
+        enumerable: true,
+        configurable: true
+    });
     return WordPressImport;
 }());
 var StaticApp = (function () {
