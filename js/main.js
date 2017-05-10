@@ -14,7 +14,7 @@ var WORDPRESS_NAMESPACES = {
     wp: "http://wordpress.org/export/1.2/"
 };
 var WordPressImport = (function () {
-    function WordPressImport(xmlString) {
+    function WordPressImport(xmlString, importOptions) {
         this._authors = [];
         this._categories = [];
         this._tags = [];
@@ -24,6 +24,13 @@ var WordPressImport = (function () {
         this._attachments = [];
         this._comments = [];
         this._commentCount = 0;
+        if (!importOptions) {
+            this._importOptions = {
+                postStatus: ["publish", "draft"],
+                commentStatus: 1,
+                excludeUnusedTags: true
+            };
+        }
         this._doc = (new DOMParser()).parseFromString(xmlString, "application/xml");
         this._title = this._doc.evaluate(WORDPRESS_PATHS.blogTitle, this._doc, null, XPathResult.STRING_TYPE, null).stringValue;
         this._url = this._doc.evaluate(WORDPRESS_PATHS.blogUrl, this._doc, null, XPathResult.STRING_TYPE, null).stringValue;
@@ -31,10 +38,36 @@ var WordPressImport = (function () {
         this._getCategoriesTags("category");
         this._getCategoriesTags("tag");
         this._getPosts();
+        // Get the total comment count
         this._commentCount = this._comments.reduce(function (total, thread) {
             return total + thread.commentCount;
         }, 0);
+        // Remove unused tags/categories
+        if (this._importOptions.excludeUnusedTags)
+            this._removeUnusedTagsCategories();
     }
+    WordPressImport.prototype.toJSON = function () {
+        return {
+            blogTitle: this.blogTitle,
+            blogUrl: this.blogUrl,
+            authors: this.authors,
+            categories: this.categories,
+            tags: this.tags,
+            posts: this.posts,
+            pages: this.pages,
+            attachments: this.attachments,
+            paths: this.paths,
+            comments: this.comments,
+            commentCount: this.commentCount,
+        };
+    };
+    Object.defineProperty(WordPressImport.prototype, "toString", {
+        get: function () {
+            return JSON.stringify(this.toJSON(), null, 2);
+        },
+        enumerable: true,
+        configurable: true
+    });
     Object.defineProperty(WordPressImport.prototype, "blogTitle", {
         get: function () {
             return this._title;
@@ -170,6 +203,7 @@ var WordPressImport = (function () {
         var item;
         var results = this._doc.evaluate(WORDPRESS_PATHS.posts, this._doc, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
         var post = results.iterateNext();
+        var status;
         while (post) {
             var post_type = post["getElementsByTagName"]("post_type")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, "");
             switch (post_type) {
@@ -183,42 +217,54 @@ var WordPressImport = (function () {
                     this._attachments.push(item);
                     break;
                 case "post":
-                    item = {
-                        id: Number(post["getElementsByTagName"]("post_id")[0].innerHTML),
-                        timestamp: (new Date(post["getElementsByTagName"]("post_date")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""))).getTime(),
-                        originalUrl: post["getElementsByTagName"]("link")[0].innerHTML,
-                        path: post["getElementsByTagName"]("link")[0].innerHTML.replace(this.blogUrl, ""),
-                        status: post["getElementsByTagName"]("status")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
-                        title: post["getElementsByTagName"]("title")[0].innerHTML,
-                        author: post["getElementsByTagName"]("creator")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
-                        content: post["getElementsByTagName"]("encoded")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
-                    };
-                    var parent = Number(post["getElementsByTagName"]("post_parent")[0].innerHTML);
-                    if (parent != 0)
-                        item.parent = parent;
-                    this._posts.push(item);
+                    status = post["getElementsByTagName"]("status")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, "");
+                    if (this._importOptions.postStatus.find(function (x) { return x == status; })) {
+                        item = {
+                            id: Number(post["getElementsByTagName"]("post_id")[0].innerHTML),
+                            timestamp: (new Date(post["getElementsByTagName"]("post_date")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""))).getTime(),
+                            originalUrl: post["getElementsByTagName"]("link")[0].innerHTML,
+                            path: post["getElementsByTagName"]("link")[0].innerHTML.replace(this.blogUrl, ""),
+                            status: status,
+                            title: post["getElementsByTagName"]("title")[0].innerHTML,
+                            author: post["getElementsByTagName"]("creator")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
+                            content: post["getElementsByTagName"]("encoded")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
+                        };
+                        var parent = Number(post["getElementsByTagName"]("post_parent")[0].innerHTML);
+                        if (parent != 0)
+                            item.parent = parent;
+                        this._posts.push(item);
+                    }
+                    else
+                        item = null;
                     break;
                 case "page":
-                    item = {
-                        id: Number(post["getElementsByTagName"]("post_id")[0].innerHTML),
-                        timestamp: (new Date(post["getElementsByTagName"]("post_date")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""))).getTime(),
-                        originalUrl: post["getElementsByTagName"]("link")[0].innerHTML,
-                        path: post["getElementsByTagName"]("link")[0].innerHTML.replace(this.blogUrl, ""),
-                        status: post["getElementsByTagName"]("status")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
-                        title: post["getElementsByTagName"]("title")[0].innerHTML,
-                        author: post["getElementsByTagName"]("creator")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
-                        content: post["getElementsByTagName"]("encoded")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
-                    };
-                    var parent = Number(post["getElementsByTagName"]("post_parent")[0].innerHTML);
-                    if (parent != 0)
-                        item.parent = parent;
-                    this._pages.push(item);
+                    status = post["getElementsByTagName"]("status")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, "");
+                    if (this._importOptions.postStatus.find(function (x) { return x == status; })) {
+                        item = {
+                            id: Number(post["getElementsByTagName"]("post_id")[0].innerHTML),
+                            timestamp: (new Date(post["getElementsByTagName"]("post_date")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""))).getTime(),
+                            originalUrl: post["getElementsByTagName"]("link")[0].innerHTML,
+                            path: post["getElementsByTagName"]("link")[0].innerHTML.replace(this.blogUrl, ""),
+                            status: post["getElementsByTagName"]("status")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
+                            title: post["getElementsByTagName"]("title")[0].innerHTML,
+                            author: post["getElementsByTagName"]("creator")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
+                            content: post["getElementsByTagName"]("encoded")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
+                        };
+                        var parent = Number(post["getElementsByTagName"]("post_parent")[0].innerHTML);
+                        if (parent != 0)
+                            item.parent = parent;
+                        this._pages.push(item);
+                    }
+                    else
+                        item = null;
                     break;
             }
-            this._addPathItem(post_type, item);
-            this._addPostTags(post);
-            if (post_type == "post" || post_type == "page")
-                this._addComments(item, post);
+            if (item) {
+                this._addPathItem(post_type, item);
+                this._addPostTags(post);
+                if (post_type == "post" || post_type == "page")
+                    this._addComments(item, post);
+            }
             post = results.iterateNext();
         }
     };
@@ -238,26 +284,40 @@ var WordPressImport = (function () {
             item.postPaths.push(post["getElementsByTagName"]("link")[0].innerHTML.replace(this.blogUrl, ""));
         }
     };
+    WordPressImport.prototype._removeUnusedTagsCategories = function () {
+        for (var x = this._tags.length - 1; x >= 0; x--) {
+            if (this._tags[x].postPaths.length == 0)
+                this._tags.splice(x, 1);
+        }
+        for (x = this._categories.length - 1; x >= 0; x--) {
+            if (this._categories[x].postPaths.length == 0)
+                this._categories.splice(x, 1);
+        }
+    };
     WordPressImport.prototype._addComments = function (post, postXML) {
         var results = postXML["getElementsByTagName"]("comment");
         var root_comments = [];
         var child_comments = [];
         var item;
+        var approved;
         for (var x = 0; x < results.length; x++) {
-            item = {
-                id: Number(results[x]["getElementsByTagName"]("comment_id")[0].innerHTML),
-                email: results[x]["getElementsByTagName"]("comment_author_email")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
-                url: results[x]["getElementsByTagName"]("comment_author_url")[0].innerHTML,
-                timestamp: Number((new Date(results[x]["getElementsByTagName"]("comment_date")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""))).getTime()),
-                content: results[x]["getElementsByTagName"]("comment_content")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
-                approved: Number(results[x]["getElementsByTagName"]("comment_approved")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, "")),
-            };
-            if (results[x]["getElementsByTagName"]("comment_parent")[0].innerHTML != "0") {
-                item.parent_id = Number(results[x]["getElementsByTagName"]("comment_parent")[0].innerHTML);
-                child_comments.push(item);
+            approved = Number(results[x]["getElementsByTagName"]("comment_approved")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""));
+            if (approved == 1) {
+                item = {
+                    id: Number(results[x]["getElementsByTagName"]("comment_id")[0].innerHTML),
+                    email: results[x]["getElementsByTagName"]("comment_author_email")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
+                    url: results[x]["getElementsByTagName"]("comment_author_url")[0].innerHTML,
+                    timestamp: Number((new Date(results[x]["getElementsByTagName"]("comment_date")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""))).getTime()),
+                    content: results[x]["getElementsByTagName"]("comment_content")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
+                    approved: approved,
+                };
+                if (results[x]["getElementsByTagName"]("comment_parent")[0].innerHTML != "0") {
+                    item.parent_id = Number(results[x]["getElementsByTagName"]("comment_parent")[0].innerHTML);
+                    child_comments.push(item);
+                }
+                else
+                    root_comments.push(item);
             }
-            else
-                root_comments.push(item);
         }
         var commentCount = root_comments.length + child_comments.length;
         if (commentCount > 0) {
@@ -316,28 +376,6 @@ var WordPressImport = (function () {
             return this._paths[path];
         return null;
     };
-    WordPressImport.prototype.toJSON = function () {
-        return {
-            blogTitle: this.blogTitle,
-            blogUrl: this.blogUrl,
-            authors: this.authors,
-            categories: this.categories,
-            tags: this.tags,
-            posts: this.posts,
-            pages: this.pages,
-            attachments: this.attachments,
-            paths: this.paths,
-            comments: this.comments,
-            commentCount: this.commentCount,
-        };
-    };
-    Object.defineProperty(WordPressImport.prototype, "toString", {
-        get: function () {
-            return JSON.stringify(this.toJSON(), null, 2);
-        },
-        enumerable: true,
-        configurable: true
-    });
     WordPressImport.prototype._resolver = function (ns) {
         return WORDPRESS_NAMESPACES[ns];
     };

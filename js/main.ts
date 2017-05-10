@@ -84,6 +84,14 @@ interface BlogComment {
   responses?:Array<BlogComment>;
 }
 
+type PostStatus = "inherit" | "publish" | "draft" | "trash";
+type CommentStatus = 0 | 1;
+interface ImportOptions {
+  postStatus?:Array<PostStatus>;
+  commentStatus?:CommentStatus;
+  excludeUnusedTags?:boolean;
+}
+
 class WordPressImport {
   private _doc:XMLDocument;
   private _title:string;
@@ -97,8 +105,17 @@ class WordPressImport {
   private _attachments:Array<Attachment> = [];
   private _comments:Array<BlogCommentThread> = [];
   private _commentCount:number = 0;
+  private _importOptions:ImportOptions;
 
-  constructor(xmlString:string) {
+  constructor(xmlString:string, importOptions?:ImportOptions) {
+    if(!importOptions) {
+      this._importOptions = {
+        postStatus: ["publish", "draft"],
+        commentStatus:1,
+        excludeUnusedTags: true
+      }
+    }
+
     this._doc = (new DOMParser()).parseFromString(xmlString, "application/xml");
     this._title = this._doc.evaluate (WORDPRESS_PATHS.blogTitle, this._doc, null, XPathResult.STRING_TYPE, null).stringValue;
     this._url = this._doc.evaluate (WORDPRESS_PATHS.blogUrl, this._doc, null, XPathResult.STRING_TYPE, null).stringValue;
@@ -106,9 +123,34 @@ class WordPressImport {
     this._getCategoriesTags("category");
     this._getCategoriesTags("tag");
     this._getPosts();
+
+    // Get the total comment count
     this._commentCount = this._comments.reduce(function(total, thread) {
       return total+thread.commentCount;
     }, 0);
+
+    // Remove unused tags/categories
+    if(this._importOptions.excludeUnusedTags) this._removeUnusedTagsCategories();
+  }
+
+  public toJSON() {
+    return {
+      blogTitle: this.blogTitle,
+      blogUrl: this.blogUrl,
+      authors: this.authors,
+      categories: this.categories,
+      tags: this.tags,
+      posts: this.posts,
+      pages: this.pages,
+      attachments: this.attachments,
+      paths: this.paths,
+      comments: this.comments,
+      commentCount: this.commentCount,
+    }
+  }
+
+  public get toString() {
+    return JSON.stringify(this.toJSON(), null, 2);
   }
 
   public get blogTitle():string {
@@ -215,6 +257,7 @@ class WordPressImport {
     var item:Post|Page|Attachment;
     var results = this._doc.evaluate (WORDPRESS_PATHS.posts, this._doc, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
     var post = results.iterateNext();
+    var status:PostStatus;
     while(post) {
       var post_type = post["getElementsByTagName"]("post_type")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, "");
       switch(post_type) {
@@ -229,40 +272,50 @@ class WordPressImport {
           break;
 
         case "post":
-          item = {
-            id: Number(post["getElementsByTagName"]("post_id")[0].innerHTML),
-            timestamp: (new Date(post["getElementsByTagName"]("post_date")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""))).getTime(),
-            originalUrl: post["getElementsByTagName"]("link")[0].innerHTML,
-            path: post["getElementsByTagName"]("link")[0].innerHTML.replace(this.blogUrl, ""),
-            status: post["getElementsByTagName"]("status")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
-            title: post["getElementsByTagName"]("title")[0].innerHTML,
-            author: post["getElementsByTagName"]("creator")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
-            content: post["getElementsByTagName"]("encoded")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
-          } as Post;
-          var parent = Number(post["getElementsByTagName"]("post_parent")[0].innerHTML);
-          if(parent != 0) item.parent = parent;
-          this._posts.push(item);
+          status = post["getElementsByTagName"]("status")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, "");
+          if(this._importOptions.postStatus.find(function(x) {return x == status})) {
+            item = {
+              id: Number(post["getElementsByTagName"]("post_id")[0].innerHTML),
+              timestamp: (new Date(post["getElementsByTagName"]("post_date")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""))).getTime(),
+              originalUrl: post["getElementsByTagName"]("link")[0].innerHTML,
+              path: post["getElementsByTagName"]("link")[0].innerHTML.replace(this.blogUrl, ""),
+              status: status,
+              title: post["getElementsByTagName"]("title")[0].innerHTML,
+              author: post["getElementsByTagName"]("creator")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
+              content: post["getElementsByTagName"]("encoded")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
+            } as Post;
+            var parent = Number(post["getElementsByTagName"]("post_parent")[0].innerHTML);
+            if(parent != 0) item.parent = parent;
+            this._posts.push(item);
+          }
+          else item = null;
           break;
 
         case "page":
-          item = {
-            id: Number(post["getElementsByTagName"]("post_id")[0].innerHTML),
-            timestamp: (new Date(post["getElementsByTagName"]("post_date")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""))).getTime(),
-            originalUrl: post["getElementsByTagName"]("link")[0].innerHTML,
-            path: post["getElementsByTagName"]("link")[0].innerHTML.replace(this.blogUrl, ""),
-            status: post["getElementsByTagName"]("status")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
-            title: post["getElementsByTagName"]("title")[0].innerHTML,
-            author: post["getElementsByTagName"]("creator")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
-            content: post["getElementsByTagName"]("encoded")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
-          } as Post;
-          var parent = Number(post["getElementsByTagName"]("post_parent")[0].innerHTML);
-          if(parent != 0) item.parent = parent;
-          this._pages.push(item);
+          status = post["getElementsByTagName"]("status")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, "");
+          if(this._importOptions.postStatus.find(function(x) {return x == status})) {
+            item = {
+              id: Number(post["getElementsByTagName"]("post_id")[0].innerHTML),
+              timestamp: (new Date(post["getElementsByTagName"]("post_date")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""))).getTime(),
+              originalUrl: post["getElementsByTagName"]("link")[0].innerHTML,
+              path: post["getElementsByTagName"]("link")[0].innerHTML.replace(this.blogUrl, ""),
+              status: post["getElementsByTagName"]("status")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
+              title: post["getElementsByTagName"]("title")[0].innerHTML,
+              author: post["getElementsByTagName"]("creator")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
+              content: post["getElementsByTagName"]("encoded")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
+            } as Post;
+            var parent = Number(post["getElementsByTagName"]("post_parent")[0].innerHTML);
+            if(parent != 0) item.parent = parent;
+            this._pages.push(item);
+          }
+          else item = null;
           break;
       }
-      this._addPathItem(post_type, item);
-      this._addPostTags(post);
-      if(post_type == "post" || post_type == "page") this._addComments(item as Post|Page, post);
+      if(item) {
+        this._addPathItem(post_type, item);
+        this._addPostTags(post);
+        if(post_type == "post" || post_type == "page") this._addComments(item as Post|Page, post);
+      }
       post = results.iterateNext();
     }
   }
@@ -284,25 +337,38 @@ class WordPressImport {
     }
   }
 
+  private _removeUnusedTagsCategories() {
+    for(var x = this._tags.length-1; x >= 0 ; x--) {
+      if(this._tags[x].postPaths.length == 0) this._tags.splice(x, 1);
+    }
+    for(x = this._categories.length-1; x >= 0 ; x--) {
+      if(this._categories[x].postPaths.length == 0) this._categories.splice(x, 1);
+    }
+  }
+
   private _addComments(post:Post|Page, postXML:Node) {
     var results = postXML["getElementsByTagName"]("comment");
     var root_comments:Array<BlogComment> = [];
     var child_comments:Array<BlogComment> = [];
     var item:BlogComment;
+    var approved:number;
     for(var x = 0; x < results.length; x++) {
-      item = {
-        id: Number(results[x]["getElementsByTagName"]("comment_id")[0].innerHTML),
-        email: results[x]["getElementsByTagName"]("comment_author_email")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
-        url: results[x]["getElementsByTagName"]("comment_author_url")[0].innerHTML,
-        timestamp: Number((new Date(results[x]["getElementsByTagName"]("comment_date")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""))).getTime()),
-        content: results[x]["getElementsByTagName"]("comment_content")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
-        approved: Number(results[x]["getElementsByTagName"]("comment_approved")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, "")),
+      approved = Number(results[x]["getElementsByTagName"]("comment_approved")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""));
+      if(approved == 1) {
+        item = {
+          id: Number(results[x]["getElementsByTagName"]("comment_id")[0].innerHTML),
+          email: results[x]["getElementsByTagName"]("comment_author_email")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
+          url: results[x]["getElementsByTagName"]("comment_author_url")[0].innerHTML,
+          timestamp: Number((new Date(results[x]["getElementsByTagName"]("comment_date")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""))).getTime()),
+          content: results[x]["getElementsByTagName"]("comment_content")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
+          approved: approved,
+        }
+        if(results[x]["getElementsByTagName"]("comment_parent")[0].innerHTML != "0") {
+          item.parent_id = Number(results[x]["getElementsByTagName"]("comment_parent")[0].innerHTML);
+          child_comments.push(item);
+        }
+        else root_comments.push(item);
       }
-      if(results[x]["getElementsByTagName"]("comment_parent")[0].innerHTML != "0") {
-        item.parent_id = Number(results[x]["getElementsByTagName"]("comment_parent")[0].innerHTML);
-        child_comments.push(item);
-      }
-      else root_comments.push(item);
     }
 
     var commentCount = root_comments.length + child_comments.length;
@@ -360,26 +426,6 @@ class WordPressImport {
   private _getPathItem(path:string):Path {
     if(this._paths[path]) return this._paths[path];
     return null;
-  }
-
-  public toJSON() {
-    return {
-      blogTitle: this.blogTitle,
-      blogUrl: this.blogUrl,
-      authors: this.authors,
-      categories: this.categories,
-      tags: this.tags,
-      posts: this.posts,
-      pages: this.pages,
-      attachments: this.attachments,
-      paths: this.paths,
-      comments: this.comments,
-      commentCount: this.commentCount,
-    }
-  }
-
-  public get toString() {
-    return JSON.stringify(this.toJSON(), null, 2);
   }
 
   private _resolver(ns:string) {
