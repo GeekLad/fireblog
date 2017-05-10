@@ -39,6 +39,7 @@ interface Post {
   author:string;
   title:string;
   content:string;
+  comments?:Array<BlogComment>;
 }
 
 interface Page extends Post { }
@@ -66,6 +67,22 @@ interface Author {
   displayName:string;
 }
 
+interface BlogCommentThread {
+  path:string;
+  comments:Array<BlogComment>;
+}
+
+interface BlogComment {
+  id:number;
+  parent_id?:number;
+  email:string;
+  url:string;
+  timestamp:number;
+  content:string;
+  approved:number;
+  responses?:Array<BlogComment>;
+}
+
 class WordPressImport {
   private _doc:XMLDocument;
   private _title:string;
@@ -77,6 +94,7 @@ class WordPressImport {
   private _posts:Array<Post> = [];
   private _pages:Array<Page> = [];
   private _attachments:Array<Attachment> = [];
+  private _comments:Array<BlogCommentThread> = [];
 
   constructor(xmlString:string) {
     this._doc = (new DOMParser()).parseFromString(xmlString, "application/xml");
@@ -122,6 +140,10 @@ class WordPressImport {
 
   public get paths():PathCollection {
     return this._paths;
+  }
+
+  public get comments():Array<BlogCommentThread> {
+    return this._comments;
   }
 
   private _getAuthors() {
@@ -230,12 +252,13 @@ class WordPressImport {
           break;
       }
       this._addPathItem(post_type, item);
-      this._getPostTags(post);
+      this._addPostTags(post);
+      if(post_type == "post" || post_type == "page") this._addComments(item as Post|Page, post);
       post = results.iterateNext();
     }
   }
 
-  private _getPostTags(post:Node) {
+  private _addPostTags(post:Node) {
     var results = post["getElementsByTagName"]("category");
     var item:Tag|Category;
     for(var x = 0; x < results.length; x++) {
@@ -250,6 +273,57 @@ class WordPressImport {
       }
       item.postPaths.push(post["getElementsByTagName"]("link")[0].innerHTML.replace(this.blogUrl, ""))
     }
+  }
+
+  private _addComments(post:Post|Page, postXML:Node) {
+    var results = postXML["getElementsByTagName"]("comment");
+    var root_comments:Array<BlogComment> = [];
+    var child_comments:Array<BlogComment> = [];
+    var item:BlogComment;
+    for(var x = 0; x < results.length; x++) {
+      item = {
+        id: Number(results[x]["getElementsByTagName"]("comment_id")[0].innerHTML),
+        email: results[x]["getElementsByTagName"]("comment_author_email")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
+        url: results[x]["getElementsByTagName"]("comment_author_url")[0].innerHTML,
+        timestamp: Number((new Date(results[x]["getElementsByTagName"]("comment_date")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""))).getTime()),
+        content: results[x]["getElementsByTagName"]("comment_content")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
+        approved: Number(results[x]["getElementsByTagName"]("comment_approved")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, "")),
+      }
+      if(results[x]["getElementsByTagName"]("comment_parent")[0].innerHTML != "0") {
+        item.parent_id = Number(results[x]["getElementsByTagName"]("comment_parent")[0].innerHTML);
+        child_comments.push(item);
+      }
+      else root_comments.push(item);
+    }
+
+    // Move child comments under the parents
+    for(x = 0; x < child_comments.length; x++) {
+      // Look for the parent in the root_comments
+      item = this._findComment(child_comments[x].parent_id, root_comments);
+      // If it's not a root comment, then it's a child comment
+      if(!item) item = this._findComment(child_comments[x].parent_id, child_comments);
+
+      // Add the child comment to the parent comment
+      if(!item.responses) item.responses = [child_comments[x]];
+      else item.responses.push(child_comments[x]);
+    }
+
+    // If we have comments, add them to the post and to the thread object
+    if(root_comments.length > 0) {
+      var thread = {
+        path: post.path,
+        comments: root_comments
+      }
+      post.comments = root_comments;
+      this._comments.push(thread);
+    }
+  }
+
+  private _findComment(id:number, comments:Array<BlogComment>) {
+    for(var x = 0; x < comments.length; x++) {
+      if(comments[x].id == id) return comments[x];
+    }
+    return null;
   }
 
   private _getCategory(category:string):Category {
@@ -289,6 +363,7 @@ class WordPressImport {
       pages: this.pages,
       attachments: this.attachments,
       paths: this.paths,
+      commehts: this.comments,
     }
   }
 
@@ -324,6 +399,7 @@ class StaticApp {
       # Attachments: ${StaticApp._import.attachments.length}<br>
       # Posts: ${StaticApp._import.posts.length}<br>
       # Pages: ${StaticApp._import.pages.length}<br>
+      # Comment Threads: ${StaticApp._import.comments.length}<br>
     `);
   }
 }

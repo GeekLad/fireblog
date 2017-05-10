@@ -22,6 +22,7 @@ var WordPressImport = (function () {
         this._posts = [];
         this._pages = [];
         this._attachments = [];
+        this._comments = [];
         this._doc = (new DOMParser()).parseFromString(xmlString, "application/xml");
         this._title = this._doc.evaluate(WORDPRESS_PATHS.blogTitle, this._doc, null, XPathResult.STRING_TYPE, null).stringValue;
         this._url = this._doc.evaluate(WORDPRESS_PATHS.blogUrl, this._doc, null, XPathResult.STRING_TYPE, null).stringValue;
@@ -89,6 +90,13 @@ var WordPressImport = (function () {
     Object.defineProperty(WordPressImport.prototype, "paths", {
         get: function () {
             return this._paths;
+        },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(WordPressImport.prototype, "comments", {
+        get: function () {
+            return this._comments;
         },
         enumerable: true,
         configurable: true
@@ -197,11 +205,13 @@ var WordPressImport = (function () {
                     break;
             }
             this._addPathItem(post_type, item);
-            this._getPostTags(post);
+            this._addPostTags(post);
+            if (post_type == "post" || post_type == "page")
+                this._addComments(item, post);
             post = results.iterateNext();
         }
     };
-    WordPressImport.prototype._getPostTags = function (post) {
+    WordPressImport.prototype._addPostTags = function (post) {
         var results = post["getElementsByTagName"]("category");
         var item;
         for (var x = 0; x < results.length; x++) {
@@ -216,6 +226,57 @@ var WordPressImport = (function () {
             }
             item.postPaths.push(post["getElementsByTagName"]("link")[0].innerHTML.replace(this.blogUrl, ""));
         }
+    };
+    WordPressImport.prototype._addComments = function (post, postXML) {
+        var results = postXML["getElementsByTagName"]("comment");
+        var root_comments = [];
+        var child_comments = [];
+        var item;
+        for (var x = 0; x < results.length; x++) {
+            item = {
+                id: Number(results[x]["getElementsByTagName"]("comment_id")[0].innerHTML),
+                email: results[x]["getElementsByTagName"]("comment_author_email")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
+                url: results[x]["getElementsByTagName"]("comment_author_url")[0].innerHTML,
+                timestamp: Number((new Date(results[x]["getElementsByTagName"]("comment_date")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""))).getTime()),
+                content: results[x]["getElementsByTagName"]("comment_content")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
+                approved: Number(results[x]["getElementsByTagName"]("comment_approved")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, "")),
+            };
+            if (results[x]["getElementsByTagName"]("comment_parent")[0].innerHTML != "0") {
+                item.parent_id = Number(results[x]["getElementsByTagName"]("comment_parent")[0].innerHTML);
+                child_comments.push(item);
+            }
+            else
+                root_comments.push(item);
+        }
+        // Move child comments under the parents
+        for (x = 0; x < child_comments.length; x++) {
+            // Look for the parent in the root_comments
+            item = this._findComment(child_comments[x].parent_id, root_comments);
+            // If it's not a root comment, then it's a child comment
+            if (!item)
+                item = this._findComment(child_comments[x].parent_id, child_comments);
+            // Add the child comment to the parent comment
+            if (!item.responses)
+                item.responses = [child_comments[x]];
+            else
+                item.responses.push(child_comments[x]);
+        }
+        // If we have comments, add them to the post and to the thread object
+        if (root_comments.length > 0) {
+            var thread = {
+                path: post.path,
+                comments: root_comments
+            };
+            post.comments = root_comments;
+            this._comments.push(thread);
+        }
+    };
+    WordPressImport.prototype._findComment = function (id, comments) {
+        for (var x = 0; x < comments.length; x++) {
+            if (comments[x].id == id)
+                return comments[x];
+        }
+        return null;
     };
     WordPressImport.prototype._getCategory = function (category) {
         for (var x = 0; x < this._categories.length; x++) {
@@ -254,6 +315,7 @@ var WordPressImport = (function () {
             pages: this.pages,
             attachments: this.attachments,
             paths: this.paths,
+            commehts: this.comments,
         };
     };
     Object.defineProperty(WordPressImport.prototype, "toString", {
@@ -279,7 +341,7 @@ var StaticApp = (function () {
     };
     StaticApp._readFile = function () {
         StaticApp._import = new WordPressImport(StaticApp._reader.result);
-        $("#import_result").html("\n      Title: " + StaticApp._import.blogTitle + "<br>\n      URL: " + StaticApp._import.blogUrl + "<br>\n      # Authors: " + StaticApp._import.authors.length + "<br>\n      # Categories: " + StaticApp._import.categories.length + "<br>\n      # Tags: " + StaticApp._import.tags.length + "<br>\n      # Attachments: " + StaticApp._import.attachments.length + "<br>\n      # Posts: " + StaticApp._import.posts.length + "<br>\n      # Pages: " + StaticApp._import.pages.length + "<br>\n    ");
+        $("#import_result").html("\n      Title: " + StaticApp._import.blogTitle + "<br>\n      URL: " + StaticApp._import.blogUrl + "<br>\n      # Authors: " + StaticApp._import.authors.length + "<br>\n      # Categories: " + StaticApp._import.categories.length + "<br>\n      # Tags: " + StaticApp._import.tags.length + "<br>\n      # Attachments: " + StaticApp._import.attachments.length + "<br>\n      # Posts: " + StaticApp._import.posts.length + "<br>\n      # Pages: " + StaticApp._import.pages.length + "<br>\n      # Comment Threads: " + StaticApp._import.comments.length + "<br>\n    ");
     };
     return StaticApp;
 }());
