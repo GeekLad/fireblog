@@ -69,6 +69,7 @@ interface Author {
 
 interface BlogCommentThread {
   path:string;
+  commentCount:number;
   comments:Array<BlogComment>;
 }
 
@@ -95,6 +96,7 @@ class WordPressImport {
   private _pages:Array<Page> = [];
   private _attachments:Array<Attachment> = [];
   private _comments:Array<BlogCommentThread> = [];
+  private _commentCount:number = 0;
 
   constructor(xmlString:string) {
     this._doc = (new DOMParser()).parseFromString(xmlString, "application/xml");
@@ -104,6 +106,9 @@ class WordPressImport {
     this._getCategoriesTags("category");
     this._getCategoriesTags("tag");
     this._getPosts();
+    this._commentCount = this._comments.reduce(function(total, thread) {
+      return total+thread.commentCount;
+    }, 0);
   }
 
   public get blogTitle():string {
@@ -144,6 +149,10 @@ class WordPressImport {
 
   public get comments():Array<BlogCommentThread> {
     return this._comments;
+  }
+
+  public get commentCount():number {
+    return this._commentCount;
   }
 
   private _getAuthors() {
@@ -296,22 +305,23 @@ class WordPressImport {
       else root_comments.push(item);
     }
 
-    // Move child comments under the parents
-    for(x = 0; x < child_comments.length; x++) {
-      // Look for the parent in the root_comments
-      item = this._findComment(child_comments[x].parent_id, root_comments);
-      // If it's not a root comment, then it's a child comment
-      if(!item) item = this._findComment(child_comments[x].parent_id, child_comments);
+    var commentCount = root_comments.length + child_comments.length;
+    if(commentCount > 0) {
+      // Move child comments under the parents
+      for(x = 0; x < child_comments.length; x++) {
+        // Look for the parent in the root_comments
+        item = this._findComment(child_comments[x].parent_id, root_comments);
+        // If it's not a root comment, then it's a child comment
+        if(!item) item = this._findComment(child_comments[x].parent_id, child_comments);
 
-      // Add the child comment to the parent comment
-      if(!item.responses) item.responses = [child_comments[x]];
-      else item.responses.push(child_comments[x]);
-    }
+        // Add the child comment to the parent comment
+        if(!item.responses) item.responses = [child_comments[x]];
+        else item.responses.push(child_comments[x]);
+      }
 
-    // If we have comments, add them to the post and to the thread object
-    if(root_comments.length > 0) {
       var thread = {
         path: post.path,
+        commentCount: commentCount,
         comments: root_comments
       }
       post.comments = root_comments;
@@ -363,7 +373,8 @@ class WordPressImport {
       pages: this.pages,
       attachments: this.attachments,
       paths: this.paths,
-      commehts: this.comments,
+      comments: this.comments,
+      commentCount: this.commentCount,
     }
   }
 
@@ -400,6 +411,7 @@ class StaticApp {
       # Posts: ${StaticApp._import.posts.length}<br>
       # Pages: ${StaticApp._import.pages.length}<br>
       # Comment Threads: ${StaticApp._import.comments.length}<br>
+      # Total Comment Count: ${StaticApp._import.commentCount}<br>
     `);
   }
 }

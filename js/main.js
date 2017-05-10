@@ -23,6 +23,7 @@ var WordPressImport = (function () {
         this._pages = [];
         this._attachments = [];
         this._comments = [];
+        this._commentCount = 0;
         this._doc = (new DOMParser()).parseFromString(xmlString, "application/xml");
         this._title = this._doc.evaluate(WORDPRESS_PATHS.blogTitle, this._doc, null, XPathResult.STRING_TYPE, null).stringValue;
         this._url = this._doc.evaluate(WORDPRESS_PATHS.blogUrl, this._doc, null, XPathResult.STRING_TYPE, null).stringValue;
@@ -30,6 +31,9 @@ var WordPressImport = (function () {
         this._getCategoriesTags("category");
         this._getCategoriesTags("tag");
         this._getPosts();
+        this._commentCount = this._comments.reduce(function (total, thread) {
+            return total + thread.commentCount;
+        }, 0);
     }
     Object.defineProperty(WordPressImport.prototype, "blogTitle", {
         get: function () {
@@ -97,6 +101,13 @@ var WordPressImport = (function () {
     Object.defineProperty(WordPressImport.prototype, "comments", {
         get: function () {
             return this._comments;
+        },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(WordPressImport.prototype, "commentCount", {
+        get: function () {
+            return this._commentCount;
         },
         enumerable: true,
         configurable: true
@@ -248,23 +259,24 @@ var WordPressImport = (function () {
             else
                 root_comments.push(item);
         }
-        // Move child comments under the parents
-        for (x = 0; x < child_comments.length; x++) {
-            // Look for the parent in the root_comments
-            item = this._findComment(child_comments[x].parent_id, root_comments);
-            // If it's not a root comment, then it's a child comment
-            if (!item)
-                item = this._findComment(child_comments[x].parent_id, child_comments);
-            // Add the child comment to the parent comment
-            if (!item.responses)
-                item.responses = [child_comments[x]];
-            else
-                item.responses.push(child_comments[x]);
-        }
-        // If we have comments, add them to the post and to the thread object
-        if (root_comments.length > 0) {
+        var commentCount = root_comments.length + child_comments.length;
+        if (commentCount > 0) {
+            // Move child comments under the parents
+            for (x = 0; x < child_comments.length; x++) {
+                // Look for the parent in the root_comments
+                item = this._findComment(child_comments[x].parent_id, root_comments);
+                // If it's not a root comment, then it's a child comment
+                if (!item)
+                    item = this._findComment(child_comments[x].parent_id, child_comments);
+                // Add the child comment to the parent comment
+                if (!item.responses)
+                    item.responses = [child_comments[x]];
+                else
+                    item.responses.push(child_comments[x]);
+            }
             var thread = {
                 path: post.path,
+                commentCount: commentCount,
                 comments: root_comments
             };
             post.comments = root_comments;
@@ -315,7 +327,8 @@ var WordPressImport = (function () {
             pages: this.pages,
             attachments: this.attachments,
             paths: this.paths,
-            commehts: this.comments,
+            comments: this.comments,
+            commentCount: this.commentCount,
         };
     };
     Object.defineProperty(WordPressImport.prototype, "toString", {
@@ -341,7 +354,7 @@ var StaticApp = (function () {
     };
     StaticApp._readFile = function () {
         StaticApp._import = new WordPressImport(StaticApp._reader.result);
-        $("#import_result").html("\n      Title: " + StaticApp._import.blogTitle + "<br>\n      URL: " + StaticApp._import.blogUrl + "<br>\n      # Authors: " + StaticApp._import.authors.length + "<br>\n      # Categories: " + StaticApp._import.categories.length + "<br>\n      # Tags: " + StaticApp._import.tags.length + "<br>\n      # Attachments: " + StaticApp._import.attachments.length + "<br>\n      # Posts: " + StaticApp._import.posts.length + "<br>\n      # Pages: " + StaticApp._import.pages.length + "<br>\n      # Comment Threads: " + StaticApp._import.comments.length + "<br>\n    ");
+        $("#import_result").html("\n      Title: " + StaticApp._import.blogTitle + "<br>\n      URL: " + StaticApp._import.blogUrl + "<br>\n      # Authors: " + StaticApp._import.authors.length + "<br>\n      # Categories: " + StaticApp._import.categories.length + "<br>\n      # Tags: " + StaticApp._import.tags.length + "<br>\n      # Attachments: " + StaticApp._import.attachments.length + "<br>\n      # Posts: " + StaticApp._import.posts.length + "<br>\n      # Pages: " + StaticApp._import.pages.length + "<br>\n      # Comment Threads: " + StaticApp._import.comments.length + "<br>\n      # Total Comment Count: " + StaticApp._import.commentCount + "<br>\n    ");
     };
     return StaticApp;
 }());
