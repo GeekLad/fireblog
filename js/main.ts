@@ -32,10 +32,11 @@ interface Tag {
 interface Post {
   id:number;
   parent?:number;
-  postTime:number;
+  timestamp:number;
   originalUrl:string;
   path:string;
   status:string;
+  author:string;
   title:string;
   content:string;
 }
@@ -199,11 +200,12 @@ class WordPressImport {
         case "post":
           item = {
             id: Number(post["getElementsByTagName"]("post_id")[0].innerHTML),
-            postTime: (new Date(post["getElementsByTagName"]("post_date")[0].innerHTML)).getTime(),
+            timestamp: (new Date(post["getElementsByTagName"]("post_date")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""))).getTime(),
             originalUrl: post["getElementsByTagName"]("link")[0].innerHTML,
             path: post["getElementsByTagName"]("link")[0].innerHTML.replace(this.blogUrl, ""),
-            status: post["getElementsByTagName"]("status")[0].innerHTML,
+            status: post["getElementsByTagName"]("status")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
             title: post["getElementsByTagName"]("title")[0].innerHTML,
+            author: post["getElementsByTagName"]("creator")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
             content: post["getElementsByTagName"]("encoded")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
           } as Post;
           var parent = Number(post["getElementsByTagName"]("post_parent")[0].innerHTML);
@@ -214,11 +216,12 @@ class WordPressImport {
         case "page":
           item = {
             id: Number(post["getElementsByTagName"]("post_id")[0].innerHTML),
-            postTime: (new Date(post["getElementsByTagName"]("post_date")[0].innerHTML)).getTime(),
+            timestamp: (new Date(post["getElementsByTagName"]("post_date")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""))).getTime(),
             originalUrl: post["getElementsByTagName"]("link")[0].innerHTML,
             path: post["getElementsByTagName"]("link")[0].innerHTML.replace(this.blogUrl, ""),
-            status: post["getElementsByTagName"]("status")[0].innerHTML,
+            status: post["getElementsByTagName"]("status")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
             title: post["getElementsByTagName"]("title")[0].innerHTML,
+            author: post["getElementsByTagName"]("creator")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
             content: post["getElementsByTagName"]("encoded")[0].innerHTML.replace(/^<!\[CDATA\[|\]\]>$/g, ""),
           } as Post;
           var parent = Number(post["getElementsByTagName"]("post_parent")[0].innerHTML);
