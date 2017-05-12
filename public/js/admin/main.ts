@@ -496,7 +496,8 @@ class App {
     var token = result.credential.accessToken;
     // The signed-in user info.
     var user = result.user;
-    // ...
+    // Test the _db
+    this._dbTest();
   }
 
   private _loginErrorHandler(error:any) {
@@ -508,6 +509,14 @@ class App {
     // The firebase.auth.AuthCredential type that was used.
     var credential = error.credential;
     // ...
+  }
+
+  private _dbTest() {
+    firebase.database().ref().child("Posts").set({
+      timestamp: (new Date().getTime()),
+      title: "Testing",
+      content: "Did this work?"
+    });
   }
 
   private _readFile() {

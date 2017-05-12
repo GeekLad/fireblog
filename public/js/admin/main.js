@@ -436,7 +436,8 @@ var App = (function () {
         var token = result.credential.accessToken;
         // The signed-in user info.
         var user = result.user;
-        // ...
+        // Test the _db
+        this._dbTest();
     };
     App.prototype._loginErrorHandler = function (error) {
         // Handle Errors here.
@@ -447,6 +448,13 @@ var App = (function () {
         // The firebase.auth.AuthCredential type that was used.
         var credential = error.credential;
         // ...
+    };
+    App.prototype._dbTest = function () {
+        firebase.database().ref().child("Posts").set({
+            timestamp: (new Date().getTime()),
+            title: "Testing",
+            content: "Did this work?"
+        });
     };
     App.prototype._readFile = function () {
         this._import = new WordPressImport(this._reader.result);
