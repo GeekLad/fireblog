@@ -1,0 +1,69 @@
+<html>
+  <head>
+    <!-- Bootstrap -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap-theme.min.css" integrity="sha384-rHyoN1iRsVXV4nD0JutlnGaslCJuC7uwjduW9SVrLvRYooPp2bWYgmgJQIXwl/Sp" crossorigin="anonymous">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="../css/style.css">
+  </head>
+  <body>
+    <nav class="navbar navbar-default navbar-fixed-top">
+      <div class="container-fluid">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#nav-menu" aria-expanded="false">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+        </div>
+        <div class="collapse navbar-collapse" id="nav-menu">
+          <ul class="nav navbar-nav">
+            <li><a href="#">Main</a></li>
+            <li class="active"><a href="#">Admin</a></li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+    <div class="container" id="main">
+      <div class="row" id="login-menu">
+        <button class="btn btn-success hidden" id="login-button">Login</button>
+        <button class="btn btn-danger hidden" id="logout-button">Logout</button>
+      </div>
+      <div class="row hidden" id="import-menu">
+        <div class="form-group">
+          <label class="btn btn-success btn-file" for='import-file'>Import Blog<input class="hidden" type='file' id='import-file' /></label>
+        </div>
+        <div id='import_result'></div>
+      </div>
+    </div>
+
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/3.9.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/3.9.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/3.9.0/firebase-database.js"></script>
+<!--    <script src="https://www.gstatic.com/firebasejs/3.9.0/firebase.js"></script> -->
+    <script>
+      // Initialize Firebase
+      var config = {
+        apiKey: "AIzaSyBfUIuqDhr7NyXK5zzfQ1o6C4vmzLQSXFI",
+        authDomain: "fireblog-653d3.firebaseapp.com",
+        databaseURL: "https://fireblog-653d3.firebaseio.com",
+        projectId: "fireblog-653d3",
+        storageBucket: "fireblog-653d3.appspot.com",
+        messagingSenderId: "12371144278"
+      };
+      firebase.initializeApp(config);
+    </script>
+    
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+
+    <!-- Bootstrap -->
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+
+    <!-- Main file -->
+    <script src="../js/admin/main.js"></script>
+  </body>
+</html>

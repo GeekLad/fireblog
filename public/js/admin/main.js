@@ -1,3 +1,4 @@
+var firebase;
 var WORDPRESS_PATHS = {
     blogTitle: "/rss/channel/title",
     blogUrl: "/rss/channel/link",
@@ -381,22 +382,77 @@ var WordPressImport = (function () {
     };
     return WordPressImport;
 }());
-var StaticApp = (function () {
-    function StaticApp() {
+var App = (function () {
+    function App() {
+        var _this = this;
+        this._reader = new FileReader();
+        this._loginMenu = $("#login-menu");
+        this._loginButton = $("#login-button");
+        this._logoutButton = $("#logout-button");
+        this._importButton = $("#import-file");
+        this._importMenu = $("#import-menu");
+        this._provider = new firebase.auth.GoogleAuthProvider();
+        this._loginStatus = false;
+        // Set up the events for the import button
+        this._reader.onload = function () { return _this._readFile; };
+        this._importButton.change(function (e) { return _this.openFile(e); });
+        // Set up login/logout events
+        $(this._loginButton).click(function () { return _this.login(); });
+        $(this._logoutButton).click(function () { return _this.logout(); });
+        // Display the login/logout button
+        this._loggedIn(firebase.auth().currentUser);
     }
-    StaticApp.init = function () {
-        StaticApp._reader.onload = StaticApp._readFile;
+    App.prototype._loggedIn = function (loggedIn) {
+        if (loggedIn) {
+            this._loginStatus = true;
+            this._loginButton.addClass("hidden");
+            this._logoutButton.removeClass("hidden");
+            this._importMenu.removeClass("hidden");
+        }
+        else {
+            this._loginStatus = false;
+            this._loginButton.removeClass("hidden");
+            this._logoutButton.addClass("hidden");
+            this._importMenu.addClass("hidden");
+        }
     };
-    StaticApp.openFile = function (e) {
-        StaticApp._reader.readAsText(e.target.files[0]);
+    App.prototype.openFile = function (e) {
+        this._reader.readAsText(e.target.files[0]);
     };
-    StaticApp._readFile = function () {
-        StaticApp._import = new WordPressImport(StaticApp._reader.result);
-        $("#import_result").html("\n      Title: " + StaticApp._import.blogTitle + "<br>\n      URL: " + StaticApp._import.blogUrl + "<br>\n      # Authors: " + StaticApp._import.authors.length + "<br>\n      # Categories: " + StaticApp._import.categories.length + "<br>\n      # Tags: " + StaticApp._import.tags.length + "<br>\n      # Attachments: " + StaticApp._import.attachments.length + "<br>\n      # Posts: " + StaticApp._import.posts.length + "<br>\n      # Pages: " + StaticApp._import.pages.length + "<br>\n      # Comment Threads: " + StaticApp._import.comments.length + "<br>\n      # Total Comment Count: " + StaticApp._import.commentCount + "<br>\n    ");
+    App.prototype.login = function () {
+        var _this = this;
+        firebase.auth().signInWithPopup(this._provider).then(function (result) { return _this._loginHandler(result); }).catch(function (error) { return _this._loginErrorHandler(error); });
     };
-    return StaticApp;
+    App.prototype.logout = function () {
+        firebase.auth().signOut();
+        this._loggedIn(false);
+    };
+    App.prototype.loginStateChange = function (user) {
+        this._loggedIn(user);
+    };
+    App.prototype._loginHandler = function (result) {
+        this._loggedIn(result.user);
+        // This gives you a Google Access Token. You can use it to access the Google API.
+        var token = result.credential.accessToken;
+        // The signed-in user info.
+        var user = result.user;
+        // ...
+    };
+    App.prototype._loginErrorHandler = function (error) {
+        // Handle Errors here.
+        var errorCode = error.code;
+        var errorMessage = error.message;
+        // The email of the user's account used.
+        var email = error.email;
+        // The firebase.auth.AuthCredential type that was used.
+        var credential = error.credential;
+        // ...
+    };
+    App.prototype._readFile = function () {
+        this._import = new WordPressImport(this._reader.result);
+        $("#import_result").html("\n      Title: " + this._import.blogTitle + "<br>\n      URL: " + this._import.blogUrl + "<br>\n      # Authors: " + this._import.authors.length + "<br>\n      # Categories: " + this._import.categories.length + "<br>\n      # Tags: " + this._import.tags.length + "<br>\n      # Attachments: " + this._import.attachments.length + "<br>\n      # Posts: " + this._import.posts.length + "<br>\n      # Pages: " + this._import.pages.length + "<br>\n      # Comment Threads: " + this._import.comments.length + "<br>\n      # Total Comment Count: " + this._import.commentCount + "<br>\n    ");
+    };
+    return App;
 }());
-StaticApp._reader = new FileReader();
-StaticApp.init();
-$("#import_file").change(StaticApp.openFile);
+var app = new App;
 //# sourceMappingURL=main.js.map

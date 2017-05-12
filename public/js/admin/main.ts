@@ -1,3 +1,4 @@
+var firebase:any;
 const WORDPRESS_PATHS = {
   blogTitle: "/rss/channel/title",
   blogUrl: "/rss/channel/link",
@@ -433,33 +434,96 @@ class WordPressImport {
   }
 }
 
-class StaticApp {
-  private static _reader:FileReader = new FileReader();
-  private static _import:WordPressImport;
+class App {
+  private _reader:FileReader = new FileReader();
+  private _import:WordPressImport;
+  private _loginMenu = $("#login-menu");
+  private _loginButton = $("#login-button");
+  private _logoutButton = $("#logout-button");
+  private _importButton = $("#import-file");
+  private _importMenu = $("#import-menu");
+  private _provider = new firebase.auth.GoogleAuthProvider();
+  private _loginStatus:boolean = false;
 
-  public static init() {
-    StaticApp._reader.onload = StaticApp._readFile;
+  constructor() {
+    // Set up the events for the import button
+    this._reader.onload = () => this._readFile;
+    this._importButton.change((e) => this.openFile(e));
+
+    // Set up login/logout events
+    $(this._loginButton).click(() => this.login());
+    $(this._logoutButton).click(() => this.logout());
+
+    // Display the login/logout button
+    this._loggedIn(firebase.auth().currentUser);
   }
 
-  public static openFile(e:any) {
-    StaticApp._reader.readAsText(e.target.files[0]);    
+  private _loggedIn(loggedIn:boolean) {
+    if(loggedIn) {
+      this._loginStatus = true;
+      this._loginButton.addClass("hidden");
+      this._logoutButton.removeClass("hidden");
+      this._importMenu.removeClass("hidden");
+    }
+    else {
+      this._loginStatus = false;
+      this._loginButton.removeClass("hidden");
+      this._logoutButton.addClass("hidden");
+      this._importMenu.addClass("hidden");
+    }
   }
 
-  private static _readFile() {
-    StaticApp._import = new WordPressImport(StaticApp._reader.result);
+  public openFile(e:any) {
+    this._reader.readAsText(e.target.files[0]);    
+  }
+
+  public login() {
+    firebase.auth().signInWithPopup(this._provider).then((result:any) => this._loginHandler(result)).catch((error:any) => this._loginErrorHandler(error));
+  }
+
+  public logout() {
+    firebase.auth().signOut();
+    this._loggedIn(false);
+  }
+
+  public loginStateChange(user:any) {
+    this._loggedIn(user);
+  }
+
+  private _loginHandler(result:any) {
+    this._loggedIn(result.user);
+    // This gives you a Google Access Token. You can use it to access the Google API.
+    var token = result.credential.accessToken;
+    // The signed-in user info.
+    var user = result.user;
+    // ...
+  }
+
+  private _loginErrorHandler(error:any) {
+    // Handle Errors here.
+    var errorCode = error.code;
+    var errorMessage = error.message;
+    // The email of the user's account used.
+    var email = error.email;
+    // The firebase.auth.AuthCredential type that was used.
+    var credential = error.credential;
+    // ...
+  }
+
+  private _readFile() {
+    this._import = new WordPressImport(this._reader.result);
     $("#import_result").html(`
-      Title: ${StaticApp._import.blogTitle}<br>
-      URL: ${StaticApp._import.blogUrl}<br>
-      # Authors: ${StaticApp._import.authors.length}<br>
-      # Categories: ${StaticApp._import.categories.length}<br>
-      # Tags: ${StaticApp._import.tags.length}<br>
-      # Attachments: ${StaticApp._import.attachments.length}<br>
-      # Posts: ${StaticApp._import.posts.length}<br>
-      # Pages: ${StaticApp._import.pages.length}<br>
-      # Comment Threads: ${StaticApp._import.comments.length}<br>
-      # Total Comment Count: ${StaticApp._import.commentCount}<br>
+      Title: ${this._import.blogTitle}<br>
+      URL: ${this._import.blogUrl}<br>
+      # Authors: ${this._import.authors.length}<br>
+      # Categories: ${this._import.categories.length}<br>
+      # Tags: ${this._import.tags.length}<br>
+      # Attachments: ${this._import.attachments.length}<br>
+      # Posts: ${this._import.posts.length}<br>
+      # Pages: ${this._import.pages.length}<br>
+      # Comment Threads: ${this._import.comments.length}<br>
+      # Total Comment Count: ${this._import.commentCount}<br>
     `);
   }
 }
-StaticApp.init();
-$("#import_file").change(StaticApp.openFile);
+var app = new App;

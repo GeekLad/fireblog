@@ -1,0 +1,18 @@
+{
+  "hosting": {
+    "public": "public",
+    "rewrites": [ {
+        "source": "**",
+        "destination": "/index.html"
+    } ]
+  },
+  "database": {
+    "rules": {
+      "posts": {
+        ".indexOn": ["timestamp", "path"],
+        ".read": true,
+        ".write": "auth.token.email_verified == true && (auth.token.isAdmin == true || auth.token.isDelegatedAdmin == true)"
+      }
+    }
+  }
+}

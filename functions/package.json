@@ -1,0 +1,10 @@
+{
+  "name": "fireblog-admin-check",
+  "description": "Checks to see if a firebase user is a blog administrator",
+  "dependencies": {
+    "cors": "^2.8.1",
+    "express": "^4.14.1",
+    "firebase-admin": "^4.1.2",
+    "firebase-functions": "^0.5.1"
+  }
+}
