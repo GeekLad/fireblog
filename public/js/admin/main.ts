@@ -454,8 +454,8 @@ class App {
     $(this._loginButton).click(() => this.login());
     $(this._logoutButton).click(() => this.logout());
 
-    // Display the login/logout button
-    this._loggedIn(firebase.auth().currentUser);
+    // Listener for login status
+    firebase.auth().onAuthStateChanged((user:any) => this._loggedIn(user));
   }
 
   private _loggedIn(loggedIn:boolean) {
@@ -484,10 +484,6 @@ class App {
   public logout() {
     firebase.auth().signOut();
     this._loggedIn(false);
-  }
-
-  public loginStateChange(user:any) {
-    this._loggedIn(user);
   }
 
   private _loginHandler(result:any) {

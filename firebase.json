@@ -11,12 +11,7 @@
       "Posts": {
         ".indexOn": ["timestamp", "path"],
         ".read": true,
-        ".write": "auth != null && auth.token.email_verified == true && auth.token.email == root.child('Admin').val()"
-      },
-      "Users": {
-        ".indexOn": ["email"],
-        ".read": false,
-        ".write": false
+        ".write": "auth !== null && auth.token.email_verified == true && root.child('Admin').child(auth.token.email.replace('.', '%2E')).exists()"
       }
     }
   }

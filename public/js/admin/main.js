@@ -399,8 +399,8 @@ var App = (function () {
         // Set up login/logout events
         $(this._loginButton).click(function () { return _this.login(); });
         $(this._logoutButton).click(function () { return _this.logout(); });
-        // Display the login/logout button
-        this._loggedIn(firebase.auth().currentUser);
+        // Listener for login status
+        firebase.auth().onAuthStateChanged(function (user) { return _this._loggedIn(user); });
     }
     App.prototype._loggedIn = function (loggedIn) {
         if (loggedIn) {
@@ -426,9 +426,6 @@ var App = (function () {
     App.prototype.logout = function () {
         firebase.auth().signOut();
         this._loggedIn(false);
-    };
-    App.prototype.loginStateChange = function (user) {
-        this._loggedIn(user);
     };
     App.prototype._loginHandler = function (result) {
         this._loggedIn(result.user);
