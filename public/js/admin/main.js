@@ -428,13 +428,14 @@ var App = (function () {
         this._loggedIn(false);
     };
     App.prototype._loginHandler = function (result) {
+        var _this = this;
         this._loggedIn(result.user);
         // This gives you a Google Access Token. You can use it to access the Google API.
-        var token = result.credential.accessToken;
+        this._credential = result.credential;
         // The signed-in user info.
-        var user = result.user;
-        // Test the _db
-        this._dbTest();
+        this._user = result.user;
+        // Test the function
+        this._firebaseFunction("isAdmin", function (data) { return _this._functionTestHandler(data); });
     };
     App.prototype._loginErrorHandler = function (error) {
         // Handle Errors here.
@@ -445,6 +446,25 @@ var App = (function () {
         // The firebase.auth.AuthCredential type that was used.
         var credential = error.credential;
         // ...
+    };
+    App.prototype._functionTestHandler = function (response) {
+        alert("It worked!");
+        console.log(response);
+    };
+    App.prototype._firebaseFunction = function (functionName, cb) {
+        var _this = this;
+        firebase.auth().currentUser.getToken().then(function (token) { return _this._firebaseAjax(token, functionName, cb); });
+    };
+    App.prototype._firebaseAjax = function (token, functionName, cb) {
+        $.ajax({
+            url: "https://us-central1-fireblog-653d3.cloudfunctions.net/" + functionName,
+            headers: {
+                "Authorization": "Bearer " + token
+            },
+            type: "GET",
+            //      cache: false,
+            success: function (data) { return cb(data); },
+        });
     };
     App.prototype._dbTest = function () {
         firebase.database().ref().child("Posts").set({

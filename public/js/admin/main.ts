@@ -444,6 +444,8 @@ class App {
   private _importMenu = $("#import-menu");
   private _provider = new firebase.auth.GoogleAuthProvider();
   private _loginStatus:boolean = false;
+  private _user:any;
+  private _credential:any;
 
   constructor() {
     // Set up the events for the import button
@@ -489,11 +491,11 @@ class App {
   private _loginHandler(result:any) {
     this._loggedIn(result.user);
     // This gives you a Google Access Token. You can use it to access the Google API.
-    var token = result.credential.accessToken;
+    this._credential = result.credential;
     // The signed-in user info.
-    var user = result.user;
-    // Test the _db
-    this._dbTest();
+    this._user = result.user;
+    // Test the function
+    this._firebaseFunction("isAdmin", (data) => this._functionTestHandler(data));
   }
 
   private _loginErrorHandler(error:any) {
@@ -505,6 +507,27 @@ class App {
     // The firebase.auth.AuthCredential type that was used.
     var credential = error.credential;
     // ...
+  }
+
+  private _functionTestHandler(response:any) {
+    alert("It worked!");
+    console.log(response);
+  }
+
+  private _firebaseFunction(functionName:string, cb:(data:any) => any) {
+    firebase.auth().currentUser.getToken().then((token:any) => this._firebaseAjax(token, functionName, cb));
+  }
+
+  private _firebaseAjax(token:string, functionName:string, cb:(data:any) => any) {
+    $.ajax({
+      url: `https://us-central1-fireblog-653d3.cloudfunctions.net/${functionName}`,
+      headers: {
+        "Authorization": `Bearer ${token}`
+      },
+      type: "GET",
+//      cache: false,
+      success: (data) => cb(data),
+    });
   }
 
   private _dbTest() {
